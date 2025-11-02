@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 import uuid
 from rooms_logic import room
+from pydantic import BaseModel
+
+class RoomDetailsFromClient(BaseModel):
+    room_name: str
+    room_password: str
 
 app = FastAPI()
 
@@ -46,12 +51,12 @@ async def ping():
     return {"message": "pong!"}
 
 @app.post("/room_creation")
-async def room_creation():
+async def room_creation(room_details: RoomDetailsFromClient):
     room_id = uuid.uuid4()
-    # Write logic here to get room_name and password from request body.
-    # Gemini says FastAPI recommended approach is to make a Pydantic Model for the
-    # Request body and use it as param of this endpoint func, it will take care
-    # of validation and parsing, etc. Have a quick look on this and continue
-    # building out the logic.
+    room_name = room_details.room_name
+    room_password = room_details.room_password
     
-    # room.create_room(room_id, room_name, room_password)
+    created_room_dict = room.create_room(room_id, room_name, room_password)
+    global rooms_dict
+    rooms_dict = rooms_dict | created_room_dict # Merging the 2 dicts. This is re-assignment not in-place modification.
+    return {"room_id": room_id}
