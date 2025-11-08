@@ -1,10 +1,14 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 import uuid
 from rooms_logic import room
 from pydantic import BaseModel
 
 class RoomDetailsFromClient(BaseModel):
     room_name: str
+    room_password: str
+
+class JoinRoomRequest(BaseModel):
+    room_id: str
     room_password: str
 
 app = FastAPI()
@@ -60,3 +64,11 @@ async def room_creation(room_details: RoomDetailsFromClient):
     global rooms_dict
     rooms_dict = rooms_dict | created_room_dict # Merging the 2 dicts. This is re-assignment not in-place modification.
     return {"room_id": room_id}
+
+@app.websocket("/join_room")
+async def join_room(websocket: WebSocket):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_text()
+        await websocket.send_text(f'Message text was "{data}"')
+    
