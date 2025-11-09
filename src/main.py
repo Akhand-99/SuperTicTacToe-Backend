@@ -8,6 +8,8 @@ class RoomDetailsFromClient(BaseModel):
     room_password: str
 
 class JoinRoomRequest(BaseModel):
+    player_id: str
+    player_name: str
     room_id: str
     room_password: str
 
@@ -60,7 +62,8 @@ async def room_creation(room_details: RoomDetailsFromClient):
     room_name = room_details.room_name
     room_password = room_details.room_password
     
-    created_room_dict = room.create_room(room_id, room_name, room_password)
+    room_id_str = str(room_id)
+    created_room_dict = room.create_room(room_id_str, room_name, room_password)
     global rooms_dict
     rooms_dict = rooms_dict | created_room_dict # Merging the 2 dicts. This is re-assignment not in-place modification.
     return {"room_id": room_id}
@@ -70,5 +73,23 @@ async def join_room(websocket: WebSocket):
     await websocket.accept()
     while True:
         data = await websocket.receive_text()
-        await websocket.send_text(f'Message text was "{data}"')
+        
+        join_room_request = JoinRoomRequest.model_validate_json(data)
+        player_id = join_room_request.player_id
+        player_name = join_room_request.player_name
+        room_id = join_room_request.room_id
+        room_password = join_room_request.room_password
+
+        room_state = rooms_dict[room_id]
+        current_room_player_count = len(room_state["players"])
+
+        if current_room_player_count == 2:
+            await websocket.send_json({"message": "Room is already full!", "isError": True})
+        elif room_id in rooms_dict and room_password == rooms_dict[room_id]["room_password"]:
+            player_details = {"player_id": player_id, "player_name": player_name}
+            room_state["players"].append(player_details)
+            room_join_success_dict = {"message": "Room Joined Successfully!", "roomState": rooms_dict[room_id], "isError": False}
+            await websocket.send_json(room_join_success_dict)
+        else:
+            await websocket.send_json({"message": "Invalid Credentials.", "isError": True})
     
