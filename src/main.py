@@ -13,6 +13,11 @@ class JoinRoomRequest(BaseModel):
     room_id: str
     room_password: str
 
+class PlaceMarkerPayload(BaseModel):
+    smallBoardNumber: int
+    smallBoardCellNumber: int
+    marker: str
+
 app = FastAPI()
 
 # rooms_dict = {
@@ -68,28 +73,42 @@ async def room_creation(room_details: RoomDetailsFromClient):
     rooms_dict = rooms_dict | created_room_dict # Merging the 2 dicts. This is re-assignment not in-place modification.
     return {"room_id": room_id}
 
-@app.websocket("/join_room")
-async def join_room(websocket: WebSocket):
+# For now, let's not focus on Pydantic validation of client ws messages. Let's focus
+# on building the features.
+@app.websocket("/game")
+async def game(websocket: WebSocket):
     await websocket.accept()
     while True:
-        data = await websocket.receive_text()
-        
-        join_room_request = JoinRoomRequest.model_validate_json(data)
-        player_id = join_room_request.player_id
-        player_name = join_room_request.player_name
-        room_id = join_room_request.room_id
-        room_password = join_room_request.room_password
+        data = await websocket.receive_json()
+        message_type = data.get("type", "")
+        message_payload = data.get("payload", {})
 
-        room_state = rooms_dict[room_id]
-        current_room_player_count = len(room_state["players"])
+        if message_type == "join_room":
+            join_room_request = JoinRoomRequest.model_validate_json(message_payload)
+            player_id = join_room_request.player_id
+            player_name = join_room_request.player_name
+            room_id = join_room_request.room_id
+            room_password = join_room_request.room_password
 
-        if current_room_player_count == 2:
-            await websocket.send_json({"message": "Room is already full!", "isError": True})
-        elif room_id in rooms_dict and room_password == rooms_dict[room_id]["room_password"]:
-            player_details = {"player_id": player_id, "player_name": player_name}
-            room_state["players"].append(player_details)
-            room_join_success_dict = {"message": "Room Joined Successfully!", "roomState": rooms_dict[room_id], "isError": False}
-            await websocket.send_json(room_join_success_dict)
-        else:
-            await websocket.send_json({"message": "Invalid Credentials.", "isError": True})
+            room_state = rooms_dict[room_id]
+            current_room_player_count = len(room_state["players"])
+
+            if current_room_player_count == 2:
+                await websocket.send_json({"message": "Room is already full!", "isError": True})
+            elif room_id in rooms_dict and room_password == rooms_dict[room_id]["room_password"]:
+                player_details = {"player_id": player_id, "player_name": player_name}
+                room_state["players"].append(player_details)
+                room_join_success_dict = {"message": "Room Joined Successfully!", "roomState": rooms_dict[room_id], "isError": False}
+                await websocket.send_json(room_join_success_dict)
+            else:
+                await websocket.send_json({"message": "Invalid Credentials.", "isError": True})
+        elif message_type == "place_marker":
+            place_marker_payload = PlaceMarkerPayload.model_validate_json(message_payload)
+            smallBoardNumber = place_marker_payload.smallBoardNumber
+            smallBoardCellNumber = place_marker_payload.smallBoardCellNumber
+            marker = place_marker_payload.marker
+
+            # TODO: Implement place_marker() logic.
+            await websocket.send_json()
+
     
