@@ -14,9 +14,10 @@ class JoinRoomRequest(BaseModel):
     room_password: str
 
 class PlaceMarkerPayload(BaseModel):
+    player_id: str
+    room_id: str
     smallBoardNumber: int
     smallBoardCellNumber: int
-    marker: str
 
 app = FastAPI()
 
@@ -84,7 +85,7 @@ async def game(websocket: WebSocket):
         message_payload = data.get("payload", {})
 
         if message_type == "join_room":
-            join_room_request = JoinRoomRequest.model_validate_json(message_payload)
+            join_room_request = JoinRoomRequest.model_validate(message_payload)
             player_id = join_room_request.player_id
             player_name = join_room_request.player_name
             room_id = join_room_request.room_id
@@ -103,12 +104,36 @@ async def game(websocket: WebSocket):
             else:
                 await websocket.send_json({"message": "Invalid Credentials.", "isError": True})
         elif message_type == "place_marker":
-            place_marker_payload = PlaceMarkerPayload.model_validate_json(message_payload)
+            place_marker_payload = PlaceMarkerPayload.model_validate(message_payload)
+            player_id = place_marker_payload.player_id
+            room_id = place_marker_payload.player_id
             smallBoardNumber = place_marker_payload.smallBoardNumber
             smallBoardCellNumber = place_marker_payload.smallBoardCellNumber
-            marker = place_marker_payload.marker
 
-            # TODO: Implement place_marker() logic.
-            await websocket.send_json()
+            # TODO: Implement place_marker() logic. refer to Frontend logic.
+            # Note: Just use player_id and room_id to understand the marker (X or O)
+            # to be placed. If player_id was first to join room(1st in the list) then 
+            # their marker is "X". Do not want marker to be sent from FE. If wrong
+            # marker (malice or not) is sent, then our game will get corrupted.
+
+            room_state = rooms_dict[room_id]
+            players_list = room_state.players
+            index = 0
+            marker = ""
+            for player_dict in players_list:
+                if player_id in player_dict:
+                    break
+                else:
+                    index+= 1
+            if index == 0:
+                marker = "X"
+            else:
+                marker = "O"
+            
+            game_state = room_state[game_state]
+            small_board_cell_list = game_state["smallBoards"][smallBoardNumber - 1]["boardCellList"]
+            small_board_cell_list[smallBoardCellNumber - 1] = marker
+
+            # await websocket.send_json()
 
     
